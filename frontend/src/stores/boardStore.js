@@ -56,6 +56,75 @@ export const useBoardStore = defineStore('board', {
       }
     },
 
+    async createCategory(payload) {
+      try {
+        const response = await apiClient.post('/categories/', payload)
+        this.categories.push(response.data)
+        this.showToast(`Kategori "${response.data.name}" berhasil dibuat!`, 'success')
+        return response.data
+      } catch (err) {
+        const msg = err.response?.data?.detail || 'Gagal membuat kategori'
+        this.showToast(msg, 'error')
+        throw err
+      }
+    },
+
+    async updateCategory(categoryId, payload) {
+      try {
+        const response = await apiClient.patch(`/categories/${categoryId}/`, payload)
+        const idx = this.categories.findIndex((c) => c.id === categoryId)
+        if (idx !== -1) {
+          this.categories[idx] = response.data
+        }
+        // Also update category color/name in existing cards in board
+        for (const col of this.columns) {
+          for (const card of col.cards) {
+            if (card.category === categoryId) {
+              card.category_name = response.data.name
+              card.category_color = response.data.color
+            }
+          }
+        }
+        this.showToast(`Kategori "${response.data.name}" berhasil diperbarui!`, 'success')
+        return response.data
+      } catch (err) {
+        const msg = err.response?.data?.detail || 'Gagal memperbarui kategori'
+        this.showToast(msg, 'error')
+        throw err
+      }
+    },
+
+    async deleteCategory(categoryId) {
+      try {
+        await apiClient.delete(`/categories/${categoryId}/`)
+        this.categories = this.categories.filter((c) => c.id !== categoryId)
+        // Set category to null for cards in state
+        for (const col of this.columns) {
+          for (const card of col.cards) {
+            if (card.category === categoryId) {
+              card.category = null
+              card.category_name = null
+            }
+          }
+        }
+        this.showToast('Kategori berhasil dihapus.', 'info')
+      } catch (err) {
+        const msg = err.response?.data?.detail || 'Gagal menghapus kategori'
+        this.showToast(msg, 'error')
+        throw err
+      }
+    },
+
+    async downloadExportCsv() {
+      try {
+        const baseURL = apiClient.defaults.baseURL || 'http://127.0.0.1:8000/api'
+        window.open(`${baseURL}/export/`, '_blank')
+        this.showToast('Mengunduh rekapan data pengeluaran (CSV)...', 'info')
+      } catch (err) {
+        this.showToast('Gagal mengunduh file ekspor', 'error')
+      }
+    },
+
     async createExpense(payload) {
       const walletStore = useWalletStore()
       try {

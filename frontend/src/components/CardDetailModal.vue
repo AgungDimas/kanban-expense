@@ -149,17 +149,25 @@ async function handleDeleteCard() {
 </script>
 
 <template>
-  <div v-if="isOpen && card" class="fixed inset-0 z-50 overflow-y-auto">
-    <!-- Backdrop -->
-    <div
-      class="fixed inset-0 bg-slate-900/50 backdrop-blur-xs transition-opacity"
-      @click="emit('close')"
-    ></div>
-
-    <div class="flex min-h-full items-center justify-center p-4">
+  <Transition
+    enter-active-class="transition duration-200 ease-out"
+    enter-from-class="opacity-0"
+    enter-to-class="opacity-100"
+    leave-active-class="transition duration-150 ease-in"
+    leave-from-class="opacity-100"
+    leave-to-class="opacity-0"
+  >
+    <div v-if="isOpen && card" class="fixed inset-0 z-50 overflow-y-auto">
+      <!-- Backdrop -->
       <div
-        class="relative w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl transition-all border border-slate-200"
-      >
+        class="fixed inset-0 bg-slate-900/50 backdrop-blur-xs transition-opacity"
+        @click="emit('close')"
+      ></div>
+
+      <div class="flex min-h-full items-center justify-center p-4">
+        <div
+          class="relative w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl transition-all duration-200 border border-slate-200"
+        >
         <!-- Modal Top Bar -->
         <div class="flex items-center justify-between pb-3.5 border-b border-slate-100">
           <div class="flex items-center gap-2">
@@ -421,4 +429,5 @@ async function handleDeleteCard() {
       @cancel="isDeleteConfirmOpen = false"
     />
   </div>
+  </Transition>
 </template>

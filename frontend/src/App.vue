@@ -9,6 +9,7 @@ import CalendarView from './views/CalendarView.vue'
 import AnalyticsView from './views/AnalyticsView.vue'
 import ExpenseModal from './components/ExpenseModal.vue'
 import WalletManageModal from './components/WalletManageModal.vue'
+import CategoryManageModal from './components/CategoryManageModal.vue'
 import CardDetailModal from './components/CardDetailModal.vue'
 import Toast from './components/Toast.vue'
 import { Loader2 } from 'lucide-vue-next'
@@ -21,6 +22,7 @@ const activeTab = ref('kanban')
 const isExpenseModalOpen = ref(false)
 const selectedColumnIdForModal = ref(null)
 const isWalletManageModalOpen = ref(false)
+const isCategoryManageModalOpen = ref(false)
 
 // Card detail state
 const isCardDetailOpen = ref(false)
@@ -33,6 +35,10 @@ function openExpenseModal(columnId = null) {
 
 function openWalletManageModal() {
   isWalletManageModalOpen.value = true
+}
+
+function openCategoryManageModal() {
+  isCategoryManageModalOpen.value = true
 }
 
 function handleCardClick(card) {
@@ -57,12 +63,13 @@ onMounted(async () => {
       @change-tab="(tab) => activeTab = tab"
       @open-expense-modal="openExpenseModal"
       @open-wallet-manage-modal="openWalletManageModal"
+      @open-category-manage-modal="openCategoryManageModal"
     />
 
-    <!-- Quick Stats Bar (shown on Kanban & Analytics) -->
+    <!-- Quick Stats Bar (shown on Kanban) -->
     <StatsBar v-if="activeTab === 'kanban'" />
 
-    <!-- Main Content Area -->
+    <!-- Main Content Area with Smooth Page Transition -->
     <main class="flex-1 flex flex-col relative overflow-hidden">
       <!-- Loading State -->
       <div
@@ -73,28 +80,32 @@ onMounted(async () => {
         <span class="text-sm font-medium">Memuat data papan Kanban...</span>
       </div>
 
-      <!-- Tab 1: Kanban Board View -->
-      <KanbanBoard
-        v-else-if="activeTab === 'kanban'"
-        @open-expense-modal-with-column="openExpenseModal"
-        @card-click="handleCardClick"
-      />
-
-      <!-- Tab 2: Calendar Schedule View -->
-      <div v-else-if="activeTab === 'calendar'" class="flex-1 overflow-y-auto">
-        <CalendarView
+      <!-- Tab View with Smooth Out-In Transition -->
+      <Transition v-else name="page-fade" mode="out-in">
+        <!-- Tab 1: Kanban Board View -->
+        <KanbanBoard
+          v-if="activeTab === 'kanban'"
+          key="kanban"
+          @open-expense-modal-with-column="openExpenseModal"
           @card-click="handleCardClick"
-          @open-expense-modal="openExpenseModal"
         />
-      </div>
 
-      <!-- Tab 3: Analytics & Budget Breakdown View -->
-      <div v-else-if="activeTab === 'analytics'" class="flex-1 overflow-y-auto">
-        <AnalyticsView />
-      </div>
+        <!-- Tab 2: Calendar Schedule View -->
+        <div v-else-if="activeTab === 'calendar'" key="calendar" class="flex-1 overflow-y-auto">
+          <CalendarView
+            @card-click="handleCardClick"
+            @open-expense-modal="openExpenseModal"
+          />
+        </div>
+
+        <!-- Tab 3: Analytics & Budget Breakdown View -->
+        <div v-else-if="activeTab === 'analytics'" key="analytics" class="flex-1 overflow-y-auto">
+          <AnalyticsView />
+        </div>
+      </Transition>
     </main>
 
-    <!-- Modals & Toasts -->
+    <!-- Modals & Toasts with Smooth Transitions -->
     <ExpenseModal
       :is-open="isExpenseModalOpen"
       :default-column-id="selectedColumnIdForModal"
@@ -104,6 +115,11 @@ onMounted(async () => {
     <WalletManageModal
       :is-open="isWalletManageModalOpen"
       @close="isWalletManageModalOpen = false"
+    />
+
+    <CategoryManageModal
+      :is-open="isCategoryManageModalOpen"
+      @close="isCategoryManageModalOpen = false"
     />
 
     <CardDetailModal

@@ -1,8 +1,11 @@
+import csv
+from decimal import Decimal
+from django.http import HttpResponse
 from rest_framework import status, viewsets
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.decorators import action
-from django.db.models import Prefetch, ProtectedError
+from django.db.models import Prefetch, ProtectedError, Sum
 
 from .models import Wallet, Category, BoardColumn, ExpenseCard
 from .serializers import (
@@ -74,6 +77,8 @@ class CategoryViewSet(viewsets.ModelViewSet):
     """
     GET /api/categories/
     POST /api/categories/
+    PUT / PATCH /api/categories/{id}/
+    DELETE /api/categories/{id}/
     """
     queryset = Category.objects.all().order_by("id")
     serializer_class = CategorySerializer
@@ -167,3 +172,63 @@ class ExpenseCardViewSet(viewsets.ModelViewSet):
             },
             status=status.HTTP_200_OK,
         )
+
+
+class AnalyticsSummaryView(APIView):
+    """
+    GET /api/analytics/summary/
+    Returns server-aggregated stats.
+    """
+    def get(self, request, *args, **kwargs):
+        total_balance = Wallet.objects.aggregate(total=Sum("balance"))["total"] or Decimal("0.00")
+        total_paid = ExpenseCard.objects.filter(column__deducts_balance=True).aggregate(total=Sum("amount"))["total"] or Decimal("0.00")
+        total_unpaid = ExpenseCard.objects.filter(column__deducts_balance=False).aggregate(total=Sum("amount"))["total"] or Decimal("0.00")
+        card_count = ExpenseCard.objects.count()
+
+        return Response({
+            "total_balance": total_balance,
+            "total_paid": total_paid,
+            "total_unpaid": total_unpaid,
+            "card_count": card_count,
+        }, status=status.HTTP_200_OK)
+
+
+class ExportCSVView(APIView):
+    """
+    GET /api/export/
+    Downloads all expenses formatted as a CSV file.
+    """
+    def get(self, request, *args, **kwargs):
+        response = HttpResponse(content_type="text/csv; charset=utf-8")
+        response["Content-Disposition"] = 'attachment; filename="kanban_expenses_export.csv"'
+
+        writer = csv.writer(response)
+        writer.writerow([
+            "ID",
+            "Judul",
+            "Nominal",
+            "Status / Kolom",
+            "Dompet",
+            "Kategori",
+            "Jatuh Tempo",
+            "Tanggal Lunas",
+            "Catatan",
+            "Dibuat Pada",
+        ])
+
+        cards = ExpenseCard.objects.select_related("column", "wallet", "category").order_by("id")
+        for card in cards:
+            writer.writerow([
+                card.id,
+                card.title,
+                f"{card.amount:.2f}",
+                card.column.name if card.column else "-",
+                card.wallet.name if card.wallet else "-",
+                card.category.name if card.category else "-",
+                card.due_date.strftime("%Y-%m-%d") if card.due_date else "-",
+                card.paid_at.strftime("%Y-%m-%d %H:%M") if card.paid_at else "-",
+                card.notes,
+                card.created_at.strftime("%Y-%m-%d %H:%M"),
+            ])
+
+        return response

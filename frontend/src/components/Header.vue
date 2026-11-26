@@ -1,15 +1,17 @@
 <script setup>
 import { computed } from 'vue'
 import { useWalletStore } from '../stores/walletStore'
+import { useBoardStore } from '../stores/boardStore'
 import { formatRupiah } from '../utils/formatters'
 import {
   Wallet,
   Plus,
-  CreditCard,
   Layers,
   Settings2,
   Calendar,
   PieChart,
+  Tag,
+  Download,
 } from 'lucide-vue-next'
 
 const props = defineProps({
@@ -19,11 +21,17 @@ const props = defineProps({
   },
 })
 
-const emit = defineEmits(['openExpenseModal', 'openWalletManageModal', 'changeTab'])
+const emit = defineEmits([
+  'openExpenseModal',
+  'openWalletManageModal',
+  'openCategoryManageModal',
+  'changeTab',
+])
+
 const walletStore = useWalletStore()
+const boardStore = useBoardStore()
 
 const totalBalance = computed(() => walletStore.totalBalance)
-const wallets = computed(() => walletStore.wallets)
 </script>
 
 <template>
@@ -104,15 +112,33 @@ const wallets = computed(() => walletStore.wallets)
           </button>
         </div>
 
-        <!-- Wallets pills & Action Buttons -->
+        <!-- Action Buttons -->
         <div class="flex items-center gap-2 flex-wrap">
-          <!-- Action Buttons -->
+          <button
+            @click="emit('openCategoryManageModal')"
+            title="Kelola kategori pengeluaran dan batas budget"
+            class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-300 rounded-xl shadow-2xs transition-all cursor-pointer"
+          >
+            <Tag class="w-3.5 h-3.5 text-purple-600" />
+            <span>Kategori</span>
+          </button>
+
           <button
             @click="emit('openWalletManageModal')"
-            class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-300 rounded-xl shadow-2xs hover:shadow-xs transition-all cursor-pointer"
+            title="Kelola rekening dan dompet digital"
+            class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-300 rounded-xl shadow-2xs transition-all cursor-pointer"
           >
-            <Settings2 class="w-3.5 h-3.5 text-slate-500" />
+            <Settings2 class="w-3.5 h-3.5 text-emerald-600" />
             <span>Dompet</span>
+          </button>
+
+          <button
+            @click="boardStore.downloadExportCsv"
+            title="Download rekapan semua pengeluaran ke Excel / CSV"
+            class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-300 rounded-xl shadow-2xs transition-all cursor-pointer"
+          >
+            <Download class="w-3.5 h-3.5 text-slate-500" />
+            <span class="hidden sm:inline">Ekspor CSV</span>
           </button>
 
           <button
