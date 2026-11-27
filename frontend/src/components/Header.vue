@@ -12,6 +12,8 @@ import {
   PieChart,
   Tag,
   Download,
+  Eye,
+  EyeOff,
 } from 'lucide-vue-next'
 
 const props = defineProps({
@@ -53,21 +55,31 @@ const totalBalance = computed(() => walletStore.totalBalance)
           <div class="h-6 w-px bg-slate-200 hidden sm:block"></div>
 
           <!-- Total Balance Widget (Clickable to manage wallets) -->
-          <button
-            @click="emit('openWalletManageModal')"
-            title="Klik untuk kelola dompet"
-            class="group bg-slate-50 hover:bg-slate-100 border border-slate-200/90 rounded-xl px-3 py-1 flex items-center gap-2 transition-all cursor-pointer text-left"
-          >
-            <div class="w-6 h-6 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center group-hover:scale-105 transition-transform">
-              <Wallet class="w-3.5 h-3.5" />
-            </div>
-            <div>
-              <span class="text-[9px] font-semibold text-slate-400 uppercase tracking-wider block">Total Saldo</span>
-              <span class="text-xs font-extrabold text-slate-900 tracking-tight">
-                {{ formatRupiah(totalBalance) }}
-              </span>
-            </div>
-          </button>
+          <div class="flex items-center gap-1 bg-slate-50 border border-slate-200/90 rounded-xl px-2.5 py-1">
+            <button
+              @click="emit('openWalletManageModal')"
+              title="Klik untuk kelola dompet"
+              class="group flex items-center gap-2 transition-all cursor-pointer text-left"
+            >
+              <div class="w-6 h-6 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center group-hover:scale-105 transition-transform">
+                <Wallet class="w-3.5 h-3.5" />
+              </div>
+              <div>
+                <span class="text-[9px] font-semibold text-slate-400 uppercase tracking-wider block">Total Saldo</span>
+                <span class="text-xs font-extrabold text-slate-900 tracking-tight">
+                  {{ formatRupiah(totalBalance, walletStore.isPrivacyMode) }}
+                </span>
+              </div>
+            </button>
+            <button
+              @click.stop="walletStore.togglePrivacyMode"
+              :title="walletStore.isPrivacyMode ? 'Tampilkan Saldo' : 'Sembunyikan Saldo (Mode Privasi)'"
+              class="p-1 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-200/60 transition-colors ml-1 cursor-pointer"
+            >
+              <EyeOff v-if="walletStore.isPrivacyMode" class="w-3.5 h-3.5 text-amber-600" />
+              <Eye v-else class="w-3.5 h-3.5" />
+            </button>
+          </div>
         </div>
 
         <!-- Navigation Tabs: Kanban / Kalender / Analitik -->

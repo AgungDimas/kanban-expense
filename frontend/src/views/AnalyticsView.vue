@@ -110,6 +110,34 @@ const overallBudgetPercent = computed(() => {
   if (totalMonthlyBudget.value === 0) return 0
   return Math.round((totalMonthlyPaid.value / totalMonthlyBudget.value) * 100)
 })
+
+// Donut chart calculation for Category Breakdown
+const donutSlices = computed(() => {
+  const total = totalMonthlyPaid.value
+  if (total <= 0) return []
+
+  const circumference = 2 * Math.PI * 40 // ~251.327
+  let cumulativePercent = 0
+
+  return categoryBudgetStats.value
+    .filter((cat) => cat.spentPaid > 0)
+    .map((cat) => {
+      const percent = cat.spentPaid / total
+      const strokeDasharray = `${(percent * circumference).toFixed(2)} ${circumference.toFixed(2)}`
+      const strokeDashoffset = (-(cumulativePercent * circumference)).toFixed(2)
+      cumulativePercent += percent
+
+      return {
+        id: cat.id,
+        name: cat.name,
+        color: cat.color,
+        amount: cat.spentPaid,
+        percentage: Math.round(percent * 100),
+        strokeDasharray,
+        strokeDashoffset,
+      }
+    })
+})
 </script>
 
 <template>
@@ -195,14 +223,98 @@ const overallBudgetPercent = computed(() => {
 
     <!-- Main Grid: Category Budget Bars & Wallet Breakdown -->
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
-      <!-- 2 Columns: Category Budget Progress Bars -->
-      <div class="lg:col-span-2 bg-white p-5 rounded-2xl border border-slate-200/90 shadow-2xs space-y-4">
-        <div class="flex items-center justify-between border-b border-slate-100 pb-3">
-          <div>
-            <h3 class="text-sm font-bold text-slate-900">Realisasi Budget per Kategori</h3>
-            <p class="text-xs text-slate-500">Perbandingan batas budget bulanan vs uang yang sudah lunas</p>
+      <!-- 2 Columns: Donut Chart & Category Budget Progress -->
+      <div class="lg:col-span-2 space-y-5">
+        <!-- Donut Visual Chart Card -->
+        <div class="bg-white p-5 rounded-2xl border border-slate-200/90 shadow-2xs space-y-4">
+          <div class="border-b border-slate-100 pb-3 flex items-center justify-between">
+            <div>
+              <h3 class="text-sm font-bold text-slate-900">Distribusi Pengeluaran Kategori</h3>
+              <p class="text-xs text-slate-500">Proporsi uang yang sudah terbayar per kategori</p>
+            </div>
+            <span class="text-xs font-bold text-indigo-700 bg-indigo-50 px-2.5 py-1 rounded-lg">
+              Total: {{ formatRupiah(totalMonthlyPaid) }}
+            </span>
+          </div>
+
+          <div v-if="donutSlices.length > 0" class="flex flex-col sm:flex-row items-center justify-around gap-6 pt-2">
+            <!-- SVG Donut -->
+            <div class="relative w-44 h-44 shrink-0 flex items-center justify-center">
+              <svg viewBox="0 0 100 100" class="w-full h-full transform -rotate-90">
+                <!-- Background track -->
+                <circle
+                  cx="50"
+                  cy="50"
+                  r="40"
+                  fill="transparent"
+                  stroke="#f1f5f9"
+                  stroke-width="12"
+                />
+                <!-- Slices -->
+                <circle
+                  v-for="slice in donutSlices"
+                  :key="slice.id"
+                  cx="50"
+                  cy="50"
+                  r="40"
+                  fill="transparent"
+                  :stroke="slice.color"
+                  stroke-width="12"
+                  :stroke-dasharray="slice.strokeDasharray"
+                  :stroke-dashoffset="slice.strokeDashoffset"
+                  class="transition-all duration-500 hover:opacity-80"
+                />
+              </svg>
+              <!-- Center Text inside Donut -->
+              <div class="absolute inset-0 flex flex-col items-center justify-center text-center p-2 pointer-events-none">
+                <span class="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Lunas</span>
+                <span class="text-xs font-extrabold text-slate-900 leading-tight">
+                  {{ formatRupiah(totalMonthlyPaid) }}
+                </span>
+              </div>
+            </div>
+
+            <!-- Legend List -->
+            <div class="flex-1 w-full space-y-2.5 max-h-48 overflow-y-auto pr-1">
+              <div
+                v-for="slice in donutSlices"
+                :key="slice.id"
+                class="flex items-center justify-between text-xs p-2 rounded-xl bg-slate-50/80 border border-slate-150"
+              >
+                <div class="flex items-center gap-2 min-w-0">
+                  <span
+                    class="w-3 h-3 rounded-full shrink-0"
+                    :style="{ backgroundColor: slice.color }"
+                  ></span>
+                  <span class="font-semibold text-slate-800 truncate">{{ slice.name }}</span>
+                </div>
+                <div class="flex items-center gap-2 shrink-0">
+                  <span class="font-extrabold text-slate-900">{{ formatRupiah(slice.amount) }}</span>
+                  <span class="text-[11px] font-bold text-slate-500 bg-white px-1.5 py-0.5 rounded border border-slate-200">
+                    {{ slice.percentage }}%
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Empty State for Donut -->
+          <div
+            v-else
+            class="py-8 text-center text-xs text-slate-400 border-2 border-dashed border-slate-200 rounded-xl"
+          >
+            Belum ada transaksi pengeluaran lunas untuk divisualisasikan. Pindahkan kartu ke kolom Lunas untuk melihat grafik.
           </div>
         </div>
+
+        <!-- Category Budget Progress Bars -->
+        <div class="bg-white p-5 rounded-2xl border border-slate-200/90 shadow-2xs space-y-4">
+          <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+            <div>
+              <h3 class="text-sm font-bold text-slate-900">Realisasi Budget per Kategori</h3>
+              <p class="text-xs text-slate-500">Perbandingan batas budget bulanan vs uang yang sudah lunas</p>
+            </div>
+          </div>
 
         <div class="space-y-4">
           <div
@@ -265,6 +377,7 @@ const overallBudgetPercent = computed(() => {
           </div>
         </div>
       </div>
+    </div>
 
       <!-- 1 Column: Wallet Breakdown -->
       <div class="bg-white p-5 rounded-2xl border border-slate-200/90 shadow-2xs space-y-4">

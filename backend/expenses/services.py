@@ -203,3 +203,41 @@ def update_card(card_id: int, validated_data: dict) -> ExpenseCard:
             setattr(card, key, value)
         card.save()
         return card
+
+
+def transfer_wallet_balance(from_wallet_id: int, to_wallet_id: int, amount: Decimal, notes: str = "") -> tuple[Wallet, Wallet]:
+    """
+    Transfer balance between two wallets atomically with select_for_update().
+    """
+    if from_wallet_id == to_wallet_id:
+        raise ValidationError({"detail": "Dompet asal dan dompet tujuan tidak boleh sama."})
+
+    if amount <= Decimal("0.00"):
+        raise ValidationError({"amount": "Nominal transfer harus lebih besar dari Rp 0."})
+
+    with transaction.atomic():
+        try:
+            from_wallet = Wallet.objects.select_for_update().get(id=from_wallet_id)
+        except Wallet.DoesNotExist:
+            raise ValidationError({"from_wallet_id": "Dompet asal tidak ditemukan."})
+
+        try:
+            to_wallet = Wallet.objects.select_for_update().get(id=to_wallet_id)
+        except Wallet.DoesNotExist:
+            raise ValidationError({"to_wallet_id": "Dompet tujuan tidak ditemukan."})
+
+        if from_wallet.balance < amount:
+            raise ValidationError({
+                "balance": (
+                    f"Saldo pada dompet '{from_wallet.name}' tidak mencukupi. "
+                    f"Sisa saldo: Rp {from_wallet.balance:,.2f}, dibutuhkan: Rp {amount:,.2f}."
+                )
+            })
+
+        from_wallet.balance -= amount
+        to_wallet.balance += amount
+        from_wallet.save(update_fields=["balance"])
+        to_wallet.save(update_fields=["balance"])
+
+        return from_wallet, to_wallet
+

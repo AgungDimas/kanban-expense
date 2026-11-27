@@ -6,6 +6,7 @@ export const useWalletStore = defineStore('wallet', {
     wallets: [],
     loading: false,
     error: null,
+    isPrivacyMode: localStorage.getItem('expense_privacy_mode') === 'true',
   }),
 
   getters: {
@@ -94,6 +95,29 @@ export const useWalletStore = defineStore('wallet', {
       if (wallet) {
         const newBal = Number(wallet.balance) + Number(diffAmount)
         wallet.balance = newBal.toFixed(2)
+      }
+    },
+
+    togglePrivacyMode() {
+      this.isPrivacyMode = !this.isPrivacyMode
+      localStorage.setItem('expense_privacy_mode', String(this.isPrivacyMode))
+    },
+
+    async transferBalance({ fromWalletId, toWalletId, amount, notes }) {
+      this.loading = true
+      try {
+        const response = await apiClient.post('/wallets/transfer/', {
+          from_wallet_id: fromWalletId,
+          to_wallet_id: toWalletId,
+          amount: Number(amount).toFixed(2),
+          notes: notes || '',
+        })
+        const { from_wallet, to_wallet } = response.data
+        this.syncWallet(from_wallet)
+        this.syncWallet(to_wallet)
+        return response.data
+      } finally {
+        this.loading = false
       }
     },
 

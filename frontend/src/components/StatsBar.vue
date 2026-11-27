@@ -50,7 +50,7 @@ const totalWishlist = computed(() => {
         <div class="min-w-0">
           <span class="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block truncate">Total Saldo</span>
           <span class="text-sm sm:text-base font-extrabold text-slate-900 tracking-tight truncate block">
-            {{ formatRupiah(totalBalance) }}
+            {{ formatRupiah(totalBalance, walletStore.isPrivacyMode) }}
           </span>
         </div>
       </div>

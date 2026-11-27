@@ -223,3 +223,64 @@ class KanbanExpenseTests(TestCase):
         self.wallet.refresh_from_db()
         self.assertEqual(self.wallet.balance, Decimal("100000.00"))
         self.assertFalse(ExpenseCard.objects.filter(id=card.id).exists())
+
+    def test_transfer_wallet_success(self):
+        """Test transferring balance between two wallets atomically."""
+        wallet2 = Wallet.objects.create(
+            user=self.user, name="Dompet Kedua", balance=Decimal("50000.00")
+        )
+
+        response = self.client.post(
+            "/api/wallets/transfer/",
+            {
+                "from_wallet_id": self.wallet.id,
+                "to_wallet_id": wallet2.id,
+                "amount": "30000.00",
+                "notes": "Topup",
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        self.wallet.refresh_from_db()
+        wallet2.refresh_from_db()
+
+        self.assertEqual(self.wallet.balance, Decimal("70000.00"))
+        self.assertEqual(wallet2.balance, Decimal("80000.00"))
+
+    def test_transfer_wallet_insufficient_balance(self):
+        """Test transfer rejected when from_wallet balance is insufficient."""
+        wallet2 = Wallet.objects.create(
+            user=self.user, name="Dompet Kedua", balance=Decimal("10000.00")
+        )
+
+        response = self.client.post(
+            "/api/wallets/transfer/",
+            {
+                "from_wallet_id": self.wallet.id,
+                "to_wallet_id": wallet2.id,
+                "amount": "200000.00",
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+        self.wallet.refresh_from_db()
+        wallet2.refresh_from_db()
+
+        self.assertEqual(self.wallet.balance, Decimal("100000.00"))
+        self.assertEqual(wallet2.balance, Decimal("10000.00"))
+
+    def test_transfer_same_wallet_rejected(self):
+        """Test transfer fails when from_wallet and to_wallet are identical."""
+        response = self.client.post(
+            "/api/wallets/transfer/",
+            {
+                "from_wallet_id": self.wallet.id,
+                "to_wallet_id": self.wallet.id,
+                "amount": "10000.00",
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+

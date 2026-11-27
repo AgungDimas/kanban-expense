@@ -16,6 +16,7 @@ import {
   Search,
   Filter,
   X,
+  ArrowUpDown,
 } from 'lucide-vue-next'
 
 const emit = defineEmits(['openExpenseModalWithColumn', 'cardClick'])
@@ -31,19 +32,40 @@ const walletsSnapshot = ref(null)
 const isDeleteConfirmOpen = ref(false)
 const cardToDelete = ref(null)
 
-// Filter & Search states
+// Filter & Search & Sort states
 const searchQuery = ref('')
 const filterCategory = ref(null)
 const filterWallet = ref(null)
+const sortBy = ref('default') // 'default' | 'amount-desc' | 'amount-asc' | 'due-asc'
 
 const isFilterActive = computed(() => {
-  return searchQuery.value.trim() !== '' || filterCategory.value !== null || filterWallet.value !== null
+  return searchQuery.value.trim() !== '' || filterCategory.value !== null || filterWallet.value !== null || sortBy.value !== 'default'
 })
 
 function clearFilters() {
   searchQuery.value = ''
   filterCategory.value = null
   filterWallet.value = null
+  sortBy.value = 'default'
+}
+
+function getSortedCards(cards) {
+  if (!cards) return []
+  if (sortBy.value === 'default') return cards
+  const sorted = [...cards]
+  if (sortBy.value === 'amount-desc') {
+    sorted.sort((a, b) => Number(b.amount || 0) - Number(a.amount || 0))
+  } else if (sortBy.value === 'amount-asc') {
+    sorted.sort((a, b) => Number(a.amount || 0) - Number(b.amount || 0))
+  } else if (sortBy.value === 'due-asc') {
+    sorted.sort((a, b) => {
+      if (!a.due_date && !b.due_date) return 0
+      if (!a.due_date) return 1
+      if (!b.due_date) return -1
+      return new Date(a.due_date) - new Date(b.due_date)
+    })
+  }
+  return sorted
 }
 
 function isCardMatchingFilter(card) {
@@ -186,6 +208,20 @@ function getVisibleCardsCount(cards) {
           </select>
         </div>
 
+        <!-- Sort Select -->
+        <div class="flex items-center gap-1.5">
+          <ArrowUpDown class="w-3.5 h-3.5 text-slate-400" />
+          <select
+            v-model="sortBy"
+            class="px-2.5 py-1.5 text-xs rounded-xl border border-slate-200 bg-slate-50/50 focus:bg-white focus:border-indigo-500 focus:outline-hidden cursor-pointer font-medium"
+          >
+            <option value="default">Urutan Manual (Drag & Drop)</option>
+            <option value="amount-desc">Nominal Tertinggi (Rp ↓)</option>
+            <option value="amount-asc">Nominal Terendah (Rp ↑)</option>
+            <option value="due-asc">Jatuh Tempo Terdekat ⏰</option>
+          </select>
+        </div>
+
         <!-- Reset Button -->
         <button
           v-if="isFilterActive"
@@ -269,8 +305,23 @@ function getVisibleCardsCount(cards) {
 
           <!-- Draggable Cards Container -->
           <div class="flex-1 overflow-y-auto p-3 min-h-[160px]">
+            <!-- Subtle banner when custom sort is active -->
+            <div
+              v-if="sortBy !== 'default'"
+              class="mb-2.5 px-2.5 py-1 bg-amber-50 border border-amber-200/80 rounded-lg text-[10px] text-amber-800 flex items-center justify-between"
+            >
+              <span>Sortir aktif (drag & drop nonaktif)</span>
+              <button
+                @click="sortBy = 'default'"
+                class="font-bold underline hover:text-amber-950 cursor-pointer ml-1"
+              >
+                Reset
+              </button>
+            </div>
+
             <draggable
-              :list="col.cards"
+              :list="sortBy === 'default' ? col.cards : getSortedCards(col.cards)"
+              :disabled="sortBy !== 'default'"
               group="kanban-cards"
               item-key="id"
               ghost-class="opacity-40 border-2 border-dashed border-indigo-400 bg-indigo-50/60 rounded-xl"

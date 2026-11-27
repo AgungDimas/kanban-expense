@@ -14,6 +14,7 @@ import {
   CreditCard,
   AlertCircle,
   HelpCircle,
+  ArrowRightLeft,
 } from 'lucide-vue-next'
 
 const props = defineProps({
@@ -28,10 +29,21 @@ const emit = defineEmits(['close'])
 const walletStore = useWalletStore()
 const boardStore = useBoardStore()
 
+const activeTab = ref('wallets') // 'wallets' | 'transfer'
+
 const showAddForm = ref(false)
 const newWalletForm = ref({ name: '', balance: '0' })
 const isAdding = ref(false)
 const errorMessage = ref('')
+
+// Transfer Form State
+const transferForm = ref({
+  from_wallet_id: '',
+  to_wallet_id: '',
+  amount: '',
+  notes: '',
+})
+const isTransferring = ref(false)
 
 // Editing state
 const editingWalletId = ref(null)
@@ -41,6 +53,21 @@ const isSavingEdit = ref(false)
 // Delete confirm dialog
 const isConfirmOpen = ref(false)
 const walletToDelete = ref(null)
+
+function extractError(err, fallback = 'Terjadi kesalahan.') {
+  if (!err?.response?.data) return err?.message || fallback
+  const data = err.response.data
+  if (typeof data === 'string') return data
+  if (data.detail) return data.detail
+  if (Array.isArray(data.non_field_errors)) return data.non_field_errors.join(', ')
+  const keys = Object.keys(data)
+  if (keys.length > 0) {
+    const firstVal = data[keys[0]]
+    if (Array.isArray(firstVal)) return `${keys[0]}: ${firstVal.join(', ')}`
+    if (typeof firstVal === 'string') return `${keys[0]}: ${firstVal}`
+  }
+  return fallback
+}
 
 function startEdit(wallet) {
   editingWalletId.value = wallet.id
@@ -67,7 +94,7 @@ async function saveEdit(walletId) {
     cancelEdit()
     boardStore.showToast('Dompet berhasil diperbarui!', 'success')
   } catch (err) {
-    errorMessage.value = err.response?.data?.detail || 'Gagal memperbarui dompet.'
+    errorMessage.value = extractError(err, 'Gagal memperbarui dompet.')
   } finally {
     isSavingEdit.value = false
   }
@@ -89,9 +116,54 @@ async function handleAddWallet() {
     showAddForm.value = false
     boardStore.showToast('Dompet baru berhasil ditambahkan!', 'success')
   } catch (err) {
-    errorMessage.value = err.response?.data?.detail || 'Gagal menambahkan dompet.'
+    errorMessage.value = extractError(err, 'Gagal menambahkan dompet.')
   } finally {
     isAdding.value = false
+  }
+}
+
+async function handleTransfer() {
+  if (!transferForm.value.from_wallet_id || !transferForm.value.to_wallet_id) {
+    errorMessage.value = 'Pilih dompet asal dan dompet tujuan transfer.'
+    return
+  }
+  if (transferForm.value.from_wallet_id === transferForm.value.to_wallet_id) {
+    errorMessage.value = 'Dompet asal dan tujuan tidak boleh sama.'
+    return
+  }
+  const amt = Number(transferForm.value.amount || 0)
+  if (amt <= 0) {
+    errorMessage.value = 'Nominal transfer harus lebih dari Rp 0.'
+    return
+  }
+
+  const fromW = walletStore.getWalletById(Number(transferForm.value.from_wallet_id))
+  if (fromW && Number(fromW.balance) < amt) {
+    errorMessage.value = `Saldo ${fromW.name} tidak cukup (${formatRupiah(fromW.balance)}).`
+    return
+  }
+
+  isTransferring.value = true
+  errorMessage.value = ''
+  try {
+    const res = await walletStore.transferBalance({
+      from_wallet_id: Number(transferForm.value.from_wallet_id),
+      to_wallet_id: Number(transferForm.value.to_wallet_id),
+      amount: amt.toFixed(2),
+      notes: transferForm.value.notes.trim(),
+    })
+    boardStore.showToast(res.detail || 'Transfer saldo berhasil!', 'success')
+    transferForm.value = {
+      from_wallet_id: '',
+      to_wallet_id: '',
+      amount: '',
+      notes: '',
+    }
+    activeTab.value = 'wallets'
+  } catch (err) {
+    errorMessage.value = extractError(err, 'Gagal melakukan transfer saldo.')
+  } finally {
+    isTransferring.value = false
   }
 }
 
@@ -109,9 +181,10 @@ async function executeDelete() {
     boardStore.showToast(`Dompet "${walletToDelete.value.name}" berhasil dihapus.`, 'info')
     walletToDelete.value = null
   } catch (err) {
-    errorMessage.value =
-      err.response?.data?.detail ||
+    errorMessage.value = extractError(
+      err,
       'Gagal menghapus dompet. Pastikan dompet tidak sedang digunakan oleh kartu pengeluaran.'
+    )
   }
 }
 </script>
@@ -164,141 +237,252 @@ async function executeDelete() {
           <span>{{ errorMessage }}</span>
         </div>
 
-        <!-- Add Form Toggle & Button -->
-        <div class="mt-4 flex items-center justify-between">
-          <span class="text-xs font-bold text-slate-700 uppercase tracking-wider">
-            Daftar Dompet Aktif ({{ walletStore.wallets.length }})
-          </span>
+        <!-- Tabs Nav -->
+        <div class="mt-4 flex rounded-xl bg-slate-100 p-1 border border-slate-200 text-xs">
           <button
-            @click="showAddForm = !showAddForm"
-            class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-lg transition-colors cursor-pointer"
+            @click="activeTab = 'wallets'; errorMessage = ''"
+            class="flex-1 py-1.5 px-3 rounded-lg font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+            :class="activeTab === 'wallets' ? 'bg-white text-emerald-700 shadow-2xs' : 'text-slate-600 hover:text-slate-900'"
           >
-            <Plus class="w-3.5 h-3.5" />
-            <span>{{ showAddForm ? 'Tutup Form' : 'Tambah Dompet' }}</span>
+            <Wallet class="w-3.5 h-3.5" />
+            <span>Daftar Dompet ({{ walletStore.wallets.length }})</span>
+          </button>
+          <button
+            @click="activeTab = 'transfer'; errorMessage = ''"
+            class="flex-1 py-1.5 px-3 rounded-lg font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+            :class="activeTab === 'transfer' ? 'bg-white text-emerald-700 shadow-2xs' : 'text-slate-600 hover:text-slate-900'"
+          >
+            <ArrowRightLeft class="w-3.5 h-3.5" />
+            <span>Transfer / Top-up</span>
           </button>
         </div>
 
-        <!-- Inline Add Wallet Form -->
-        <div
-          v-if="showAddForm"
-          class="mt-3 p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-3"
-        >
-          <div class="text-xs font-semibold text-slate-800">Form Dompet Baru:</div>
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-            <input
-              v-model="newWalletForm.name"
-              type="text"
-              placeholder="Nama Dompet (BCA, GoPay, dll)"
-              class="px-3 py-1.5 text-xs rounded-lg border border-slate-300 bg-white focus:outline-hidden focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
-            />
-            <input
-              v-model="newWalletForm.balance"
-              type="number"
-              min="0"
-              step="any"
-              placeholder="Saldo Awal (Rp)"
-              class="px-3 py-1.5 text-xs rounded-lg border border-slate-300 bg-white font-semibold focus:outline-hidden focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
-            />
+        <!-- TAB 1: WALLET LIST & ADD -->
+        <div v-if="activeTab === 'wallets'" class="mt-3">
+          <!-- Add Form Toggle & Button -->
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold text-slate-700 uppercase tracking-wider">
+              Rekening & Dompet
+            </span>
+            <button
+              @click="showAddForm = !showAddForm"
+              class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-lg transition-colors cursor-pointer"
+            >
+              <Plus class="w-3.5 h-3.5" />
+              <span>{{ showAddForm ? 'Tutup Form' : 'Tambah Dompet' }}</span>
+            </button>
           </div>
-          <div class="flex justify-end gap-2">
-            <button
-              @click="showAddForm = false"
-              class="px-3 py-1 text-xs font-medium text-slate-600 hover:bg-slate-200 rounded-lg"
+
+          <!-- Inline Add Wallet Form -->
+          <div
+            v-if="showAddForm"
+            class="mt-3 p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-3"
+          >
+            <div class="text-xs font-semibold text-slate-800">Form Dompet Baru:</div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              <input
+                v-model="newWalletForm.name"
+                type="text"
+                placeholder="Nama Dompet (BCA, GoPay, dll)"
+                class="px-3 py-1.5 text-xs rounded-lg border border-slate-300 bg-white focus:outline-hidden focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+              />
+              <input
+                v-model="newWalletForm.balance"
+                type="number"
+                min="0"
+                step="any"
+                placeholder="Saldo Awal (Rp)"
+                class="px-3 py-1.5 text-xs rounded-lg border border-slate-300 bg-white font-semibold focus:outline-hidden focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+              />
+            </div>
+            <div class="flex justify-end gap-2">
+              <button
+                @click="showAddForm = false"
+                class="px-3 py-1 text-xs font-medium text-slate-600 hover:bg-slate-200 rounded-lg cursor-pointer"
+              >
+                Batal
+              </button>
+              <button
+                @click="handleAddWallet"
+                :disabled="isAdding"
+                class="px-4 py-1 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-2xs disabled:opacity-50 cursor-pointer"
+              >
+                {{ isAdding ? 'Menyimpan...' : 'Simpan' }}
+              </button>
+            </div>
+          </div>
+
+          <!-- Wallets List -->
+          <div class="mt-3 space-y-2 max-h-64 overflow-y-auto pr-1">
+            <div
+              v-for="w in walletStore.wallets"
+              :key="w.id"
+              class="flex items-center justify-between p-3 rounded-xl border border-slate-200 hover:border-slate-300 bg-white transition-all shadow-2xs"
             >
-              Batal
-            </button>
-            <button
-              @click="handleAddWallet"
-              :disabled="isAdding"
-              class="px-4 py-1 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-2xs disabled:opacity-50"
+              <!-- Normal View Mode -->
+              <template v-if="editingWalletId !== w.id">
+                <div class="flex items-center gap-3">
+                  <div class="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-600 shrink-0">
+                    <CreditCard class="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h4 class="text-xs font-bold text-slate-800">{{ w.name }}</h4>
+                    <p class="text-xs font-extrabold text-emerald-700 mt-0.5">
+                      {{ formatRupiah(w.balance) }}
+                    </p>
+                  </div>
+                </div>
+
+                <div class="flex items-center gap-1.5">
+                  <button
+                    @click="startEdit(w)"
+                    title="Ubah Dompet"
+                    class="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors cursor-pointer"
+                  >
+                    <Edit2 class="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    @click="promptDelete(w)"
+                    title="Hapus Dompet"
+                    class="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                  >
+                    <Trash2 class="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </template>
+
+              <!-- Edit Mode -->
+              <template v-else>
+                <div class="flex-1 grid grid-cols-2 gap-2 mr-2">
+                  <input
+                    v-model="editForm.name"
+                    type="text"
+                    class="px-2.5 py-1 text-xs rounded-lg border border-slate-300 bg-white font-medium focus:border-indigo-500"
+                  />
+                  <input
+                    v-model="editForm.balance"
+                    type="number"
+                    step="any"
+                    class="px-2.5 py-1 text-xs rounded-lg border border-slate-300 bg-white font-bold text-emerald-700 focus:border-indigo-500"
+                  />
+                </div>
+                <div class="flex items-center gap-1 shrink-0">
+                  <button
+                    @click="saveEdit(w.id)"
+                    :disabled="isSavingEdit"
+                    title="Simpan"
+                    class="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg cursor-pointer"
+                  >
+                    <Check class="w-4 h-4 stroke-[2.5]" />
+                  </button>
+                  <button
+                    @click="cancelEdit"
+                    title="Batal"
+                    class="p-1.5 text-slate-400 hover:bg-slate-100 rounded-lg cursor-pointer"
+                  >
+                    <X class="w-4 h-4" />
+                  </button>
+                </div>
+              </template>
+            </div>
+
+            <!-- Empty state -->
+            <div
+              v-if="walletStore.wallets.length === 0"
+              class="p-8 text-center text-xs text-slate-400 border-2 border-dashed border-slate-200 rounded-xl"
             >
-              {{ isAdding ? 'Menyimpan...' : 'Simpan' }}
-            </button>
+              <HelpCircle class="w-6 h-6 mx-auto mb-2 text-slate-300" />
+              <span>Belum ada dompet. Klik tombol "+ Tambah Dompet" di atas untuk menambahkan.</span>
+            </div>
           </div>
         </div>
 
-        <!-- Wallets List -->
-        <div class="mt-3 space-y-2 max-h-64 overflow-y-auto pr-1">
-          <div
-            v-for="w in walletStore.wallets"
-            :key="w.id"
-            class="flex items-center justify-between p-3 rounded-xl border border-slate-200 hover:border-slate-300 bg-white transition-all shadow-2xs"
-          >
-            <!-- Normal View Mode -->
-            <template v-if="editingWalletId !== w.id">
-              <div class="flex items-center gap-3">
-                <div class="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-600 shrink-0">
-                  <CreditCard class="w-4 h-4" />
-                </div>
-                <div>
-                  <h4 class="text-xs font-bold text-slate-800">{{ w.name }}</h4>
-                  <p class="text-xs font-extrabold text-emerald-700 mt-0.5">
-                    {{ formatRupiah(w.balance) }}
-                  </p>
-                </div>
-              </div>
-
-              <div class="flex items-center gap-1.5">
-                <button
-                  @click="startEdit(w)"
-                  title="Ubah Dompet"
-                  class="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors cursor-pointer"
-                >
-                  <Edit2 class="w-3.5 h-3.5" />
-                </button>
-                <button
-                  @click="promptDelete(w)"
-                  title="Hapus Dompet"
-                  class="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
-                >
-                  <Trash2 class="w-3.5 h-3.5" />
-                </button>
-              </div>
-            </template>
-
-            <!-- Edit Mode -->
-            <template v-else>
-              <div class="flex-1 grid grid-cols-2 gap-2 mr-2">
-                <input
-                  v-model="editForm.name"
-                  type="text"
-                  class="px-2.5 py-1 text-xs rounded-lg border border-slate-300 bg-white font-medium focus:border-indigo-500"
-                />
-                <input
-                  v-model="editForm.balance"
-                  type="number"
-                  step="any"
-                  class="px-2.5 py-1 text-xs rounded-lg border border-slate-300 bg-white font-bold text-emerald-700 focus:border-indigo-500"
-                />
-              </div>
-              <div class="flex items-center gap-1 shrink-0">
-                <button
-                  @click="saveEdit(w.id)"
-                  :disabled="isSavingEdit"
-                  title="Simpan"
-                  class="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg"
-                >
-                  <Check class="w-4 h-4 stroke-[2.5]" />
-                </button>
-                <button
-                  @click="cancelEdit"
-                  title="Batal"
-                  class="p-1.5 text-slate-400 hover:bg-slate-100 rounded-lg"
-                >
-                  <X class="w-4 h-4" />
-                </button>
-              </div>
-            </template>
+        <!-- TAB 2: TRANSFER ANTAR DOMPET -->
+        <div v-else class="mt-3 p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-3.5">
+          <div class="flex items-center gap-2 text-xs font-bold text-slate-800">
+            <ArrowRightLeft class="w-4 h-4 text-emerald-600" />
+            <span>Pindah / Top-up Saldo Antar Dompet</span>
           </div>
 
-          <!-- Empty state -->
-          <div
-            v-if="walletStore.wallets.length === 0"
-            class="p-8 text-center text-xs text-slate-400 border-2 border-dashed border-slate-200 rounded-xl"
-          >
-            <HelpCircle class="w-6 h-6 mx-auto mb-2 text-slate-300" />
-            <span>Belum ada dompet. Klik tombol "+ Tambah Dompet" di atas untuk menambahkan.</span>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <!-- Dari Dompet -->
+            <div>
+              <label class="block text-[11px] font-semibold text-slate-600 mb-1">Dari Dompet (Sumber)</label>
+              <select
+                v-model="transferForm.from_wallet_id"
+                class="w-full px-3 py-1.5 text-xs rounded-lg border border-slate-300 bg-white focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 cursor-pointer"
+              >
+                <option value="" disabled>Pilih dompet asal...</option>
+                <option
+                  v-for="w in walletStore.wallets"
+                  :key="w.id"
+                  :value="w.id"
+                  :disabled="w.id === Number(transferForm.to_wallet_id)"
+                >
+                  {{ w.name }} (Saldo: {{ formatRupiah(w.balance) }})
+                </option>
+              </select>
+            </div>
+
+            <!-- Ke Dompet -->
+            <div>
+              <label class="block text-[11px] font-semibold text-slate-600 mb-1">Ke Dompet (Tujuan)</label>
+              <select
+                v-model="transferForm.to_wallet_id"
+                class="w-full px-3 py-1.5 text-xs rounded-lg border border-slate-300 bg-white focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 cursor-pointer"
+              >
+                <option value="" disabled>Pilih dompet tujuan...</option>
+                <option
+                  v-for="w in walletStore.wallets"
+                  :key="w.id"
+                  :value="w.id"
+                  :disabled="w.id === Number(transferForm.from_wallet_id)"
+                >
+                  {{ w.name }} (Saldo: {{ formatRupiah(w.balance) }})
+                </option>
+              </select>
+            </div>
           </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <!-- Nominal -->
+            <div>
+              <label class="block text-[11px] font-semibold text-slate-600 mb-1">Nominal Transfer (Rp) *</label>
+              <input
+                v-model="transferForm.amount"
+                type="number"
+                min="1"
+                step="any"
+                placeholder="Contoh: 100000"
+                class="w-full px-3 py-1.5 text-xs rounded-lg border border-slate-300 bg-white font-bold text-slate-900 focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+              />
+            </div>
+
+            <!-- Catatan -->
+            <div>
+              <label class="block text-[11px] font-semibold text-slate-600 mb-1">Catatan / Keterangan</label>
+              <input
+                v-model="transferForm.notes"
+                type="text"
+                placeholder="Contoh: Top-up e-wallet bulanan"
+                class="w-full px-3 py-1.5 text-xs rounded-lg border border-slate-300 bg-white focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+              />
+            </div>
+          </div>
+
+          <div class="flex justify-end pt-2">
+            <button
+              @click="handleTransfer"
+              :disabled="isTransferring || walletStore.wallets.length < 2"
+              class="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-xs disabled:opacity-50 transition-all cursor-pointer"
+            >
+              <ArrowRightLeft class="w-3.5 h-3.5" />
+              <span>{{ isTransferring ? 'Memproses Transfer...' : 'Kirim Transfer Sekarang' }}</span>
+            </button>
+          </div>
+          <p v-if="walletStore.wallets.length < 2" class="text-[11px] text-amber-600">
+            * Butuh minimal 2 dompet untuk melakukan transfer saldo.
+          </p>
         </div>
 
         <!-- Total Saldo Footer -->

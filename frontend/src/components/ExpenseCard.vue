@@ -1,7 +1,7 @@
 <script setup>
 import { computed } from 'vue'
-import { formatRupiah, formatDate } from '../utils/formatters'
-import { Calendar, CheckCircle2, Wallet, Trash2, GripVertical } from 'lucide-vue-next'
+import { formatRupiah, formatDate, getDueDateUrgency } from '../utils/formatters'
+import { Calendar, CheckCircle2, Wallet, Trash2, GripVertical, AlertCircle, Clock } from 'lucide-vue-next'
 
 const props = defineProps({
   card: {
@@ -19,6 +19,7 @@ const emit = defineEmits(['delete', 'click'])
 const formattedAmount = computed(() => formatRupiah(props.card.amount))
 const formattedDueDate = computed(() => formatDate(props.card.due_date))
 const formattedPaidDate = computed(() => formatDate(props.card.paid_at))
+const dueUrgency = computed(() => getDueDateUrgency(props.card.due_date, props.isPaid || !!props.card.paid_at))
 </script>
 
 <template>
@@ -89,9 +90,15 @@ const formattedPaidDate = computed(() => formatDate(props.card.paid_at))
         <CheckCircle2 class="w-3.5 h-3.5" />
         <span>Lunas {{ formattedPaidDate ? `(${formattedPaidDate})` : '' }}</span>
       </div>
-      <div v-else-if="card.due_date" class="flex items-center gap-1 font-medium text-slate-500 shrink-0">
-        <Calendar class="w-3.5 h-3.5 text-slate-400" />
-        <span>{{ formattedDueDate }}</span>
+      <div
+        v-else-if="dueUrgency"
+        class="flex items-center gap-1 shrink-0 px-2 py-0.5 rounded-md border text-[10px]"
+        :class="dueUrgency.badgeClass"
+      >
+        <AlertCircle v-if="dueUrgency.isOverdue || dueUrgency.isToday" class="w-3 h-3 shrink-0" />
+        <Clock v-else-if="dueUrgency.isSoon" class="w-3 h-3 shrink-0" />
+        <Calendar v-else class="w-3 h-3 text-slate-400 shrink-0" />
+        <span>{{ dueUrgency.label }}</span>
       </div>
     </div>
   </div>

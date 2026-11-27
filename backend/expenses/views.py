@@ -14,6 +14,7 @@ from .serializers import (
     BoardColumnSerializer,
     ExpenseCardSerializer,
     MoveCardSerializer,
+    WalletTransferSerializer,
 )
 from .services import (
     get_default_user,
@@ -21,6 +22,7 @@ from .services import (
     create_card,
     delete_card,
     update_card,
+    transfer_wallet_balance,
 )
 
 
@@ -71,6 +73,31 @@ class WalletViewSet(viewsets.ModelViewSet):
                 },
                 status=status.HTTP_400_BAD_REQUEST,
             )
+
+    @action(detail=False, methods=["post"], url_path="transfer")
+    def transfer(self, request):
+        """
+        POST /api/wallets/transfer/
+        Payload: { "from_wallet_id": 1, "to_wallet_id": 2, "amount": "50000.00", "notes": "Topup" }
+        """
+        serializer = WalletTransferSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        from_w, to_w = transfer_wallet_balance(
+            from_wallet_id=serializer.validated_data["from_wallet_id"],
+            to_wallet_id=serializer.validated_data["to_wallet_id"],
+            amount=serializer.validated_data["amount"],
+            notes=serializer.validated_data.get("notes", ""),
+        )
+
+        return Response(
+            {
+                "detail": f"Berhasil transfer Rp {serializer.validated_data['amount']:,.2f} dari '{from_w.name}' ke '{to_w.name}'.",
+                "from_wallet": WalletSerializer(from_w).data,
+                "to_wallet": WalletSerializer(to_w).data,
+            },
+            status=status.HTTP_200_OK,
+        )
 
 
 class CategoryViewSet(viewsets.ModelViewSet):

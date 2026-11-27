@@ -1,3 +1,4 @@
+from decimal import Decimal
 from rest_framework import serializers
 from .models import Wallet, Category, BoardColumn, ExpenseCard
 from .services import get_default_user
@@ -76,3 +77,11 @@ class BoardColumnSerializer(serializers.ModelSerializer):
         # Return cards ordered by position
         cards = obj.cards.all().select_related("wallet", "category").order_by("position", "id")
         return ExpenseCardSerializer(cards, many=True).data
+
+
+class WalletTransferSerializer(serializers.Serializer):
+    from_wallet_id = serializers.IntegerField(required=True)
+    to_wallet_id = serializers.IntegerField(required=True)
+    amount = serializers.DecimalField(max_digits=15, decimal_places=2, required=True, min_value=Decimal("1.00"))
+    notes = serializers.CharField(required=False, allow_blank=True, default="")
+
